@@ -23,9 +23,11 @@ async def txt2ImgRequest(payload):
     
     if(payload['use_prompt_shortcut']): # use edit prompt
         #edit prompt, replaceShortcut(prompt)
-        payload['prompt'] = prompt_shortcut.replaceShortcut(payload['prompt'])
+        prompt_shortcut_dict = prompt_shortcut.load()
+        prompt_shortcut_dict.update(payload["prompt_shortcut_ui_dict"])
+        payload['prompt'] = prompt_shortcut.replaceShortcut(payload['prompt'],prompt_shortcut_dict)
         # edit negative prompt, replaceShortcut(negative_prompt)
-        payload['negative_prompt'] = prompt_shortcut.replaceShortcut(payload['negative_prompt'])
+        payload['negative_prompt'] = prompt_shortcut.replaceShortcut(payload['negative_prompt'],prompt_shortcut_dict)
         
     
     #request the images to be generated
@@ -37,7 +39,9 @@ async def txt2ImgRequest(payload):
 
         #create a directory to store the images at
         # dirName = f'{time.time()}'
-        dir_fullpath,dirName = serverHelper.makeDirPathName()
+        # dir_fullpath,dirName = serverHelper.makeDirPathName()
+        uniqueDocumentId = payload['uniqueDocumentId']
+        dir_fullpath,dirName = serverHelper.getUniqueDocumentDirPathName(uniqueDocumentId)
         serverHelper.createFolder(dir_fullpath)
         image_paths = []
         #for each image store the prompt and settings in the meta data
@@ -227,6 +231,78 @@ async def sdapi(path: str, request: Request, response: Response):
     return response
 
 
+@app.post('/history/load')
+async def loadHistory(request: Request):
+    # {'image_paths','metadata_setting'}
+    history = {}
+    try:
+        json = await request.json()
+    except: 
+        json = {}
+
+    try:
+
+        uniqueDocumentId = json['uniqueDocumentId']
+        
+        import glob
+
+        image_paths = glob.glob(f'./output/{uniqueDocumentId}/*.png')
+        settings_paths = glob.glob(f'./output/{uniqueDocumentId}/*.json')
+        print("loadHistory: image_paths:", image_paths)
+        history['image_paths'] = image_paths
+        history['metadata_jsons'] = []
+        for image_path in image_paths:
+            metadata_dict = metadata_to_json.createMetadataJsonFileIfNotExist(image_path)
+            history['metadata_jsons'].append(metadata_dict)  
+        
+    except:
+        
+        print(f'{request}')
+    
+    # return response
+    return {"image_paths":history['image_paths'], "metadata_jsons":history['metadata_jsons']}
+
+
+@app.post('/prompt_shortcut/load')
+async def loadPromptShortcut(request: Request):
+    prompt_shortcut_json = {}
+    try:
+        json = await request.json()
+    except: 
+        json = {}
+
+    try:
+
+        prompt_shortcut_json = prompt_shortcut.load()
+        # response.body = {"prompt_shortcut":prompt_shortcut}
+        # response.status_code = 200
+    except:
+        # print(f'exception: fail to send request to {sd_url}/sdapi/v1/{path}')
+        print(f'{request}')
+        
+    # return response
+    return {"prompt_shortcut":prompt_shortcut_json}
+@app.post('/prompt_shortcut/save')
+async def loadPromptShortcut(request: Request):
+    prompt_shortcut_json = {}
+    try:
+        json = await request.json()
+    except: 
+        json = {}
+
+    try:
+        print("json: ",json)
+        print("json['prompt_shortcut']: ",json['prompt_shortcut'])
+        # save the prompt shortcut to the prompt_shortcut.json
+        prompt_shortcut_json = json['prompt_shortcut']
+        # response.body = {"prompt_shortcut":prompt_shortcut}
+        # response.body = {"prompt_shortcut":prompt_shortcut}
+        prompt_shortcut.writeToJson("prompt_shortcut.json",prompt_shortcut_json)
+    except:
+        # print(f'exception: fail to send request to {sd_url}/sdapi/v1/{path}')
+        print(f'error occurred durning reading the request {request}')
+    # return response
+    return {"prompt_shortcut":prompt_shortcut_json}
 
 @app.post("/swapModel")
 async def swapModel(request:Request):

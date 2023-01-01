@@ -14,6 +14,45 @@ const { executeAsModal } = require('photoshop').core
 const dialog_box = require('./dialog_box')
 const {entrypoints} = require('uxp')
 
+
+
+async function getUniqueDocumentId () {
+  try {
+    uniqueDocumentId = await psapi.readUniqueDocumentIdExe()
+
+    console.log(
+      'btnLinkCurrentDocument.click():  uniqueDocumentId: ',
+      uniqueDocumentId
+    )
+
+    // Regular expression to check if string is a valid UUID
+    const regexExp =
+      /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/gi
+
+    // String with valid UUID separated by dash
+    // const str = 'a24a6ea4-ce75-4665-a070-57453082c256'
+
+    const isValidId = regexExp.test(uniqueDocumentId) // true
+    console.log('isValidId: ', isValidId)
+    if (isValidId == false) {
+      let uuid = self.crypto.randomUUID()
+      console.log(uuid) // for example "36b8f84d-df4e-4d49-b662-bcde71a8764f"
+      await psapi.saveUniqueDocumentIdExe(uuid)
+      uniqueDocumentId = uuid
+    }
+  } catch (e) {
+    console.warn('warning Document Id may not be valid', e)
+  }
+  return uniqueDocumentId
+}
+
+document
+  .getElementById('btnLinkCurrentDocument')
+  .addEventListener('click', async () => {
+    await getUniqueDocumentId()
+  })
+
+  
 // attach event listeners for tabs
 Array.from(document.querySelectorAll(".sp-tab")).forEach(theTab => {
   theTab.onclick = () => {
@@ -205,6 +244,18 @@ async function initSamplers () {
 }
 }
 
+
+function promptShortcutExample(){
+
+  let prompt_shortcut_example = {
+    "game_like": "Unreal Engine, Octane Render, arcane card game ui, hearthstone art style, epic fantasy style art",
+    "large_building_1": "castle, huge building, large building",
+    "painterly_style_1": "A full portrait of a beautiful post apocalyptic offworld arctic explorer, intricate, elegant, highly detailed, digital painting, artstation, concept art, smooth, sharp focus, illustration",
+    "ugly": " ((((ugly)))), (((duplicate))), ((morbid)), ((mutilated)), out of frame, extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), out of frame, ugly, extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), mutated hands, (fused fingers), (too many fingers), (((long neck)))"
+  }
+  var JSONInPrettyFormat = JSON.stringify(prompt_shortcut_example, undefined, 7);
+  document.getElementById('taPromptShortcut').value = JSONInPrettyFormat
+}
 //steps to load init_image:
 //duplicate the active layer
 // duplication()
@@ -229,6 +280,9 @@ let g_models = []
 let g_model_title = ''
 let gWidth = 512
 let gHeight = 512
+let hWidth = 512
+let hHeight = 512
+let h_denoising_strength = .7
 let g_inpainting_fill = 0
 let g_last_outpaint_layers = []
 let g_last_inpaint_layers = []
@@ -246,6 +300,7 @@ refreshModels() // get the models when the plugin loads
 displayUpdate()
 initSamplers()
 updateVersionUI()
+promptShortcutExample()
 //***********End: init function calls */
 
 //add click event on radio button mode, so that when a button is clicked it change g_sd_mode globally
@@ -482,6 +537,15 @@ document.querySelector('#slWidth').addEventListener('input', evt => {
   gWidth = sliderToResolution(evt.target.value)
   document.querySelector('#lWidth').textContent = gWidth
 })
+
+document.querySelector('#hrHeight').addEventListener('input', evt => {
+  hHeight = sliderToResolution(evt.target.value)
+  document.querySelector('#hHeight').textContent = hHeight
+})
+document.querySelector('#hrWidth').addEventListener('input', evt => {
+  hWidth = sliderToResolution(evt.target.value)
+  document.querySelector('#hWidth').textContent = hWidth
+})
 document.querySelector('#slInpaintPadding').addEventListener('input', evt => {
   padding = evt.target.value * 4
   document.querySelector('#lInpaintPadding').textContent = padding
@@ -500,7 +564,19 @@ document
     ).innerHTML = `${denoising_string_value}`
     // console.log(`New denoising_string_value: ${document.querySelector('#tiDenoisingStrength').value}`)
   })
-
+document
+  .querySelector('#hrDenoisingStrength')
+  .addEventListener('input', evt => {
+    const denoising_string_value = evt.target.value / 100.0
+    h_denoising_strength = denoising_string_value
+    // document.querySelector('#lDenoisingStrength').value= Number(denoising_string_value)
+    document.querySelector('#hDenoisingStrength').textContent =
+      denoising_string_value
+    document.getElementById(
+      'hDenoisingStrength'
+    ).innerHTML = `${denoising_string_value}`
+    // console.log(`New denoising_string_value: ${document.querySelector('#tiDenoisingStrength').value}`)
+  })
 // document.getElementById('btnPopulate').addEventListener('click', showLayerNames)
 
 document
@@ -731,6 +807,7 @@ document.getElementById('btnGenerate').addEventListener('click', async () => {
 
   const prompt = document.querySelector('#taPrompt').value
   const negative_prompt = document.querySelector('#taNegativePrompt').value
+  const hi_res_fix = document.getElementById('chHiResFixs').checked
   // console.log("prompt:",prompt)
   // console.log("negative_prompt:",negative_prompt)
   const model_index = document.querySelector('#mModelsMenu').selectedIndex
@@ -742,6 +819,19 @@ document.getElementById('btnGenerate').addEventListener('click', async () => {
 
   console.dir(numberOfImages)
   const bUsePromptShortcut = document.getElementById('chUsePromptShortcut').checked
+  let prompt_shortcut_ui_dict = {}
+  try {
+    let prompt_shortcut_string = document.getElementById('taPromptShortcut').value
+    prompt_shortcut_ui_dict = JSON.parse(prompt_shortcut_string)
+  } catch (e) {
+    console.warn(`warning prompt_shortcut_ui_dict is not valid Json obj: ${e}`)
+    prompt_shortcut_ui_dict = {}
+  }
+
+  console.log("Check")
+
+  const uniqueDocumentId = await getUniqueDocumentId()
+  console.log("Check2")
   payload = {
     prompt: prompt,
 
@@ -751,11 +841,17 @@ document.getElementById('btnGenerate').addEventListener('click', async () => {
     sampler_index: g_sd_sampler,
     width: gWidth,
     height: gHeight,
+    enable_hr : hi_res_fix,
+    firstphase_width: hWidth,
+    firstphase_height: hHeight,
+    denoising_strength: h_denoising_strength, // Highres Denoising, overwritten in img2img
     batch_size: numberOfImages,
     cfg_scale: cfg_scale,
     seed: seed,
     mask_blur: mask_blur,
-    use_prompt_shortcut: bUsePromptShortcut
+    use_prompt_shortcut: bUsePromptShortcut,
+    prompt_shortcut_ui_dict: prompt_shortcut_ui_dict,
+  uniqueDocumentId: uniqueDocumentId
   }
 
   console.log({ payload })
@@ -1182,5 +1278,89 @@ document.getElementById('collapsible').addEventListener('click', function () {
   // this.textContent = `${g_sd_sampler}: ${this.textContent}`
 })
 
-// outpaint.selectAllLayers()
+document.getElementById('btnLoadHistory').addEventListener('click',async function(){
+  try{
+
+    const output_dir_relative = "./server/python_server/"
+    const container = document.getElementById("divHistoryImagesContainer")
+    const uniqueDocumentId = await getUniqueDocumentId()
+    const [image_paths, metadata_jsons] = await sdapi.loadHistory(uniqueDocumentId)
+    
+    while(container.firstChild){
+    container.removeChild(container.firstChild);
+    }
+    
+    let i = 0
+    for (image_path of image_paths){
+      
+      const img = document.createElement('img')
+      img.src = `${output_dir_relative}/${image_path}`
+      img.className = "history-image"
+      img.dataset.metadata_json_string = JSON.stringify(metadata_jsons[i])
+      container.appendChild(img)
+      img.addEventListener('click',(e)=>{
+        const metadata_json = JSON.parse(e.target.dataset.metadata_json_string)
+        console.log("metadata_json: ",metadata_json)
+        document.querySelector('#tiSeed').value = metadata_json.Seed
+        document.querySelector('#historySeedLabel').textContent = metadata_json.Seed
+      })
+      i++
+    }
+    
+  }catch(e){
+    console.warn(`loadHistory warning: ${e}`)
+  }
+
+}) 
+document.getElementById('btnLoadPromptShortcut').addEventListener('click',async function(){
+  try{
+
+    prompt_shortcut = await sdapi.loadPromptShortcut()
+    var JSONInPrettyFormat = JSON.stringify(prompt_shortcut, undefined, 4);
+    document.getElementById('taPromptShortcut').value = JSONInPrettyFormat
+  }catch(e){
+    console.warn(`loadPromptShortcut warning: ${e}`)
+  }
+
+}) 
+
+
+document
+  .getElementById('btnSavePromptShortcut')
+  .addEventListener('click', async function () {
+    try {
+      
+
+      const r1 = await dialog_box.prompt(
+        'Are you sure you want to save prompt shortcut?',
+        "This will override your old prompt shortcut file, you can't undo this operation",
+        ['Cancel', 'Save']
+      )
+      if ((r1 || 'Save') !== 'Save') {
+        /* cancelled or No */
+        console.log("cancel")
+      } else {
+        /* Yes */
+        console.log("Save")
+        
+      
+      
+        prompt_shortcut_string = document.getElementById('taPromptShortcut').value
+        let prompt_shortcut =  JSON.parse(prompt_shortcut_string)
+  
+  
+        prompt_shortcut = await sdapi.savePromptShortcut(prompt_shortcut)
+        // var JSONInPrettyFormat = JSON.stringify(prompt_shortcut, undefined, 4);
+        console.log('prompt_shortcut was saved: ', prompt_shortcut)
+      
+      }
+    } catch (e) {
+      console.warn(`savePromptShortcut warning: ${e}`)
+    }
+
+
+
+     
+  })
+
 
