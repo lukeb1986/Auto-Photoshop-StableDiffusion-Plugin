@@ -1,6 +1,6 @@
-// import {helloHelper} from 'helper.js'
-// helloHelper2 = require('./helper.js')
-// for organizational proposes
+import {helloHelper} from 'helper.js'
+helloHelper2 = require('./helper.js')
+for (organizational; proposes;)
 
 const helper = require('./helper')
 const sdapi = require('./sdapi')
