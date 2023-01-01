@@ -50,11 +50,11 @@ git clone https://github.com/AbdullahAlfaraj/Auto-Photoshop-StableDiffusion-Plug
 Edit the "webui-user.bat" in automatic1111 
  change this line 
 ```
-set COMMANDLINE_ARGS= 
+set =
 ```
 to
 ```
-set COMMANDLINE_ARGS= --api
+set COMMANDLINE_ARGS=
 ```
 that will allow the plugin to communicate with the automatic1111 project. After saving close the "webui-user.bat" file and run it normally.
 
