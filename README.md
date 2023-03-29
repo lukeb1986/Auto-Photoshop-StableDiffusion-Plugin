@@ -54,7 +54,7 @@ set =
 ```
 to
 ```
-set COMMANDLINE_ARGS=
+set COMMANDLINE_ARGS= --API
 ```
 that will allow the plugin to communicate with the automatic1111 project. After saving close the "webui-user.bat" file and run it normally.
 
